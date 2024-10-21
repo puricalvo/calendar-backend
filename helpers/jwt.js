@@ -7,7 +7,7 @@ const generarJWT = ( uid, name ) => {
        const payload = { uid, name };
        
        jwt.sign( payload, process.env.SECRET_JWT_SEED, {
-            expiresIn: '48h' // hay que poner las horas en las que quieres que caduque el token.
+            expiresIn: '120h' // hay que poner las horas en las que quieres que caduque el token.
        }, (err, token ) => {
 
             if ( err ) {

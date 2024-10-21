@@ -1,11 +1,11 @@
+
 const { Schema, model } = require('mongoose');
 
 const MensageSchema = Schema({
  
-    
-    
-    notes: {
+    text: {
         type: String,
+        required: true
         
     },
    
@@ -13,6 +13,10 @@ const MensageSchema = Schema({
         type: Schema.Types.ObjectId,
         ref: 'Usuario',
         required: true
+    },
+    date: {
+        type: Date,
+        default: Date.now
     }
  
     

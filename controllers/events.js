@@ -128,6 +128,7 @@ const eliminarEvento = async( req, res = response ) => {
             msg: 'Hable con el administrador'
         });   
     }
+    
 
 
 }
