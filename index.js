@@ -33,8 +33,8 @@ app.use(cors());
 // app.use(middleware.handle(i18next));
 
 // Directorio publico
-app.use(express.static(path.join(__dirname, '../calendar/public')));
-// app.use( express.static('public2') );
+// app.use(express.static(path.join(__dirname, '../calendar/public')));
+app.use( express.static('public2') );
 
 // Lectura y parseo del body
 app.use( express.json() );

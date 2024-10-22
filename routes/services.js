@@ -6,6 +6,9 @@ const { Router } = require('express');
 
 const { validarJWT } = require('../middlewares/validar-jwt' );
 const { getServicios, crearServicio, actualizarServicio, eliminarServicio } = require('../controllers/services');
+const { check } = require('express-validator');
+const { validarCampos } = require('../middlewares/validar-campos');
+const { isDateWithoutTime } = require('../helpers/isDateWithoutTime');
 
 
 
@@ -20,7 +23,11 @@ router.get('/', getServicios );
 
 
 // Crear un nuevo evento
-router.post('/', crearServicio,  );
+router.post('/',[ // Middelwares
+    check('start','Fecha de inicio es obligatoria ').custom( isDateWithoutTime ),
+    check('end','Fecha de finalizacion es obligatoria ').custom( isDateWithoutTime ),
+    validarCampos 
+ ], crearServicio,  );
 
 
 // Actualizar Evento

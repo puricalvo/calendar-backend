@@ -1,35 +1,38 @@
 const { response, request } = require("express");
 const Servicio = require('../models/Servicio');
 const { format } = require('date-fns');
+const moment = require('moment');
 
 const getServicios = async (req, res = response) => {
+
+
+
     try {
-        // Filtrar los mensajes por el UID del usuario autenticado
         const uid = req.uid;
-        const servicios = await Servicio.find({ user: uid })  // Filtrar por el usuario autenticado
-                                      .populate('user', 'name');
 
-                                      
-         // Formatear las horas antes de enviarlas
-         const serviciosFormateados = servicios.map(servicio => {
-            // Convertir hInicio y hFinal a objetos Date
-            const hInicioDate = new Date(`1970-01-01T${String(servicio.hInicio).padStart(4, '0').slice(0, 2)}:${String(servicio.hInicio).padStart(4, '0').slice(2)}:00Z`);
-            const hFinalDate = new Date(`1970-01-01T${String(servicio.hFinal).padStart(4, '0').slice(0, 2)}:${String(servicio.hFinal).padStart(4, '0').slice(2)}:00Z`);
+        // Obtener la fecha actual y establecer los límites
+        const startOfToday = moment().startOf('day').toDate();
+        const endOfToday = moment().endOf('day').toDate();
 
-            return {
-                ...servicio._doc,
-                hInicio: format(hInicioDate, 'HH:mm'),
-                hFinal: format(hFinalDate, 'HH:mm'),
-            };
-        });
-        
+        // Filtrar los servicios por el UID del usuario autenticado y la fecha
+        const servicios = await Servicio.find({
+            user: uid,
+            start: { $gte: startOfToday, $lte: endOfToday } // Solo los servicios de hoy
+        }).populate('user', 'name');
+
+        // Formatear el resultado antes de enviarlo
+        const serviciosFormateados = servicios.map(servicio => ({
+            ...servicio._doc,
+            hInicio: format(new Date(servicio.hInicio), 'HH:mm'),
+            hFinal: format(new Date(servicio.hFinal), 'HH:mm'),
+        }));
 
         res.json({
             ok: true,
             servicios: serviciosFormateados
         });
     } catch (error) {
-        console.error('Error al obtener los sevicios:', error);
+        console.error('Error al obtener los servicios:', error);
         res.status(500).json({
             ok: false,
             msg: 'Error al obtener los servicios'
@@ -37,24 +40,29 @@ const getServicios = async (req, res = response) => {
     }
 }
 
-const crearServicio = async (req, res = response) => {
-    const servicio = new Servicio(req.body); // Instancia del modelo Servicio
-        console.log(req.body);
-    try {
-        // Asociar el servicio con el usuario autenticado
-        servicio.user = req.uid;
 
+const crearServicio = async (req, res = response) => {
+    // Extrae las fechas y horas del cuerpo de la solicitud
+    const { start, end, hInicio, hFinal, ...restoDelServicio } = req.body; 
+
+    const servicio = new Servicio({
+        ...restoDelServicio,
+        user: req.uid,
+        start, // Asegúrate de que estés almacenando el campo 'start' como un Date
+        end,   // Almacena 'end' como un Date también
+        hInicio, // Almacena hInicio y hFinal si es necesario
+        hFinal
+    });
+
+    try {
         // Guardar el servicio en la base de datos
         const servicioGuardado = await servicio.save();
 
-        // Convertir hInicio y hFinal a objetos Date
-        const hInicioDate = new Date(`1970-01-01T${String(servicioGuardado.hInicio).padStart(4, '0').slice(0, 2)}:${String(servicioGuardado.hInicio).padStart(4, '0').slice(2)}:00Z`);
-        const hFinalDate = new Date(`1970-01-01T${String(servicioGuardado.hFinal).padStart(4, '0').slice(0, 2)}:${String(servicioGuardado.hFinal).padStart(4, '0').slice(2)}:00Z`);
-
+        // Formatear el servicio guardado antes de enviarlo de vuelta
         const servicioFormateado = {
             ...servicioGuardado._doc,
-            hInicio: format(hInicioDate, 'HH:mm'),
-            hFinal: format(hFinalDate, 'HH:mm'),
+            hInicio: format(new Date(servicioGuardado.hInicio), 'HH:mm'),
+            hFinal: format(new Date(servicioGuardado.hFinal), 'HH:mm'),
         };
 
         res.json({
@@ -62,10 +70,8 @@ const crearServicio = async (req, res = response) => {
             servicio: servicioFormateado
         });
 
-        
-
     } catch (error) {
-        console.error('Error al crear el servicio:', error); // Mostrar detalles del error en la consola
+        console.error('Error al crear el servicio:', error);
         res.status(500).json({
             ok: false,
             msg: 'Hable con el administrador'

@@ -45,9 +45,16 @@ const ServicioSchema = Schema({
     observaciones: {
         type: String,
         // required: true
-    }, 
- 
-
+    },
+    start: { 
+        type: Date, 
+        required: true 
+    },
+    end: {
+        type: Date, 
+        required: true 
+    },
+  
     user: {
         type: Schema.Types.ObjectId,
         ref: 'Usuario',
@@ -57,9 +64,6 @@ const ServicioSchema = Schema({
         type: Date,
         default: Date.now
     }
- 
-    
-   
 
 });
 
