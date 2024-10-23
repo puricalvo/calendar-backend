@@ -2,10 +2,11 @@ const express = require('express');
 require('dotenv').config();
 const cors = require('cors');
 const { dbConnection } = require('./database/config' );
-const path = require('path');
+// const path = require('path');
 // const i18next = require('i18next');
 // const Backend = require('i18next-fs-backend');
 // const middleware = require('i18next-http-middleware');
+
 
 
 // Crear el servidor de Express
