@@ -31,7 +31,7 @@ const ServicioSchema = Schema({
         // required: true
     }, 
     codigo: {
-        type: Number,
+        type: String,
         // required: true
     }, 
     lInicio: {

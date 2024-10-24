@@ -2,27 +2,16 @@ const express = require('express');
 require('dotenv').config();
 const cors = require('cors');
 const { dbConnection } = require('./database/config' );
-// const path = require('path');
-// const i18next = require('i18next');
-// const Backend = require('i18next-fs-backend');
-// const middleware = require('i18next-http-middleware');
+const cron = require('node-cron');  // Importar node-cron
+const Servicio = require('./models/Servicio'); // Importar tu modelo de servicio
+const moment = require('moment');  // Importar moment para manejar fechas
 
 
 
 // Crear el servidor de Express
 const app = express();
 
-// // Configurar i18next en el backend
-// i18next
-//   .use(Backend)  // Cargar traducciones desde archivos locales
-//   .use(middleware.LanguageDetector)  // Detectar idioma automáticamente
-//   .init({
-//     fallbackLng: 'es',  // Idioma por defecto
-//     preload: ['es', 'en', 'fr', 'ca'],  // Idiomas soportados
-//     backend: {
-//       loadPath: './locales/{{lng}}/translation.json',  // Ruta a los archivos de traducción
-//     }
-//   });
+
 
 // Base de datos
 dbConnection();
@@ -50,7 +39,22 @@ app.use('/api/messages', require('./routes/messages'));
 // Ruta Services
 app.use('/api/services', require('./routes/services'));
  
+// Tarea cron para eliminar servicios antiguos a medianoche
+cron.schedule('0 0 * * *', async () => {
+    console.log('Ejecutando tarea de eliminación de servicios...');
 
+    const startOfToday = moment().startOf('day').toDate();
+
+    try {
+        // Eliminar servicios cuya fecha 'start' sea anterior al inicio del día actual
+        const result = await Servicio.deleteMany({
+            start: { $lt: startOfToday }
+        });
+        console.log(`Servicios antiguos eliminados: ${result.deletedCount}`);
+    } catch (error) {
+        console.error('Error al eliminar servicios antiguos:', error);
+    }
+});
 
 
 // Escuchar peticiones

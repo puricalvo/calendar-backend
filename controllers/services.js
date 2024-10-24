@@ -1,12 +1,11 @@
 const { response, request } = require("express");
 const Servicio = require('../models/Servicio');
-const { format } = require('date-fns');
 const moment = require('moment');
 
+const { format } = require('date-fns'); // Asegúrate de importar format correctamente
+
+
 const getServicios = async (req, res = response) => {
-
-
-
     try {
         const uid = req.uid;
 
@@ -20,11 +19,11 @@ const getServicios = async (req, res = response) => {
             start: { $gte: startOfToday, $lte: endOfToday } // Solo los servicios de hoy
         }).populate('user', 'name');
 
-        // Formatear el resultado antes de enviarlo
+        // No necesitas formatear las horas porque ya están almacenadas como cadenas
         const serviciosFormateados = servicios.map(servicio => ({
             ...servicio._doc,
-            hInicio: format(new Date(servicio.hInicio), 'HH:mm'),
-            hFinal: format(new Date(servicio.hFinal), 'HH:mm'),
+            hInicio: servicio.hInicio || 'Hora no disponible',
+            hFinal: servicio.hFinal || 'Hora no disponible',
         }));
 
         res.json({
@@ -38,38 +37,28 @@ const getServicios = async (req, res = response) => {
             msg: 'Error al obtener los servicios'
         });
     }
-}
+};
 
 
 const crearServicio = async (req, res = response) => {
-    // Extrae las fechas y horas del cuerpo de la solicitud
     const { start, end, hInicio, hFinal, ...restoDelServicio } = req.body; 
 
     const servicio = new Servicio({
         ...restoDelServicio,
         user: req.uid,
-        start, // Asegúrate de que estés almacenando el campo 'start' como un Date
-        end,   // Almacena 'end' como un Date también
-        hInicio, // Almacena hInicio y hFinal si es necesario
-        hFinal
+        start,  // Guardar 'start' como Date
+        end,    // Guardar 'end' como Date
+        hInicio,  // Ya es un string con formato "HH:mm"
+        hFinal   // Ya es un string con formato "HH:mm"
     });
 
     try {
-        // Guardar el servicio en la base de datos
         const servicioGuardado = await servicio.save();
-
-        // Formatear el servicio guardado antes de enviarlo de vuelta
-        const servicioFormateado = {
-            ...servicioGuardado._doc,
-            hInicio: format(new Date(servicioGuardado.hInicio), 'HH:mm'),
-            hFinal: format(new Date(servicioGuardado.hFinal), 'HH:mm'),
-        };
 
         res.json({
             ok: true,
-            servicio: servicioFormateado
+            servicio: servicioGuardado
         });
-
     } catch (error) {
         console.error('Error al crear el servicio:', error);
         res.status(500).json({
@@ -77,7 +66,7 @@ const crearServicio = async (req, res = response) => {
             msg: 'Hable con el administrador'
         });
     }
-}
+};
 
 const actualizarServicio = async (req = request, res = response) => {
     const servicioId = req.params.id;
