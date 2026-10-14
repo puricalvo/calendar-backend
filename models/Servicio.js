@@ -2,6 +2,11 @@ const { Schema, model } = require('mongoose');
 
 const ServicioSchema = Schema({
 
+    dayType: {
+        type: String,
+        enum: ['service', 'rest'],
+        default: 'service'
+    },
     salCoche: {
         type: String,
         // required: true
@@ -46,6 +51,15 @@ const ServicioSchema = Schema({
         type: String,
         // required: true
     },
+    incidentComment: {
+        type: String,
+        trim: true,
+        maxlength: 1000
+    },
+    completed: {
+        type: Boolean,
+        default: false
+    },
     start: { 
         type: Date, 
         required: true 
@@ -59,6 +73,10 @@ const ServicioSchema = Schema({
         type: Schema.Types.ObjectId,
         ref: 'Usuario',
         required: true
+    },
+    assignedTo: {
+        type: Schema.Types.ObjectId,
+        ref: 'Usuario'
     },
     date: {
         type: Date,
