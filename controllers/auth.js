@@ -3,9 +3,15 @@ const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const { generarJWT } = require('../helpers/jwt');
 
+const getConfiguredRole = (email) => {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    return adminEmail && email.trim().toLowerCase() === adminEmail ? 'admin' : 'user';
+};
+
 const crearUsuario = async( req, res = response ) => {
 
-    const {  email, password } =  req.body;
+    const { name, password } = req.body;
+    const email = req.body.email.trim().toLowerCase();
 
     try {
 
@@ -18,7 +24,12 @@ const crearUsuario = async( req, res = response ) => {
             });
         }
 
-        usuario = new Usuario( req.body );
+        usuario = new Usuario({
+            name,
+            email,
+            password,
+            role: getConfiguredRole(email)
+        });
 
         // Encriptar contraseña
         const salt = bcrypt.genSaltSync();
@@ -28,12 +39,13 @@ const crearUsuario = async( req, res = response ) => {
         await usuario.save();
 
         // Generar nuestro JWT
-        const token = await generarJWT( usuario.id, usuario.name);
+        const token = await generarJWT( usuario.id, usuario.name, usuario.role);
 
         res.status(201).json({
             ok: true,
             uid: usuario.id,
             name: usuario.name,
+            role: usuario.role,
             token
         });
         
@@ -49,7 +61,8 @@ const crearUsuario = async( req, res = response ) => {
 
 const loginUsuario = async( req, res = response ) => {
 
-    const { email, password } =  req.body;
+    const { password } = req.body;
+    const email = req.body.email.trim().toLowerCase();
 
     try {
 
@@ -72,13 +85,20 @@ const loginUsuario = async( req, res = response ) => {
             });
         }
 
+        const role = getConfiguredRole(usuario.email);
+        if (usuario.role !== role) {
+            usuario.role = role;
+            await usuario.save();
+        }
+
         // Generar nuestro JWT
-        const token = await generarJWT( usuario.id, usuario.name);
+        const token = await generarJWT( usuario.id, usuario.name, role);
 
         res.json({
             ok: true,
             uid: usuario.id,
             name: usuario.name,
+            role,
             token
         })
 
@@ -94,22 +114,60 @@ const loginUsuario = async( req, res = response ) => {
 }
 
 const revalidarToken = async( req, res = response ) => {
+    try {
+        const usuario = await Usuario.findById(req.uid);
+        if (!usuario) {
+            return res.status(401).json({
+                ok: false,
+                msg: 'La cuenta ya no existe'
+            });
+        }
 
-    const { uid, name } = req;
+        const role = getConfiguredRole(usuario.email);
+        if (usuario.role !== role) {
+            usuario.role = role;
+            await usuario.save();
+        }
 
-    // Generar un nuevo JWT y retornarlo
-    const token = await generarJWT( uid, name );
-
-    res.json({
-        ok: true,
-        uid,
-        name,
-        token
-    })
+        const token = await generarJWT(usuario.id, usuario.name, role);
+        res.json({
+            ok: true,
+            uid: usuario.id,
+            name: usuario.name,
+            role,
+            token
+        });
+    } catch (error) {
+        console.error('Error al renovar la sesión:', error);
+        res.status(500).json({
+            ok: false,
+            msg: 'No se pudo renovar la sesión'
+        });
+    }
 }
+
+const getUsers = async (req, res = response) => {
+    try {
+        const usuarios = await Usuario.find({ role: 'user' })
+            .select('name email')
+            .sort({ name: 1 });
+
+        res.json({
+            ok: true,
+            usuarios: usuarios.map(({ id, name, email }) => ({ id, name, email }))
+        });
+    } catch (error) {
+        console.error('Error al obtener los usuarios:', error);
+        res.status(500).json({
+            ok: false,
+            msg: 'No se pudieron obtener los usuarios'
+        });
+    }
+};
 
 module.exports = {
     crearUsuario,
     loginUsuario,
     revalidarToken,
+    getUsers,
 }
