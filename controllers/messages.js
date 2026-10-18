@@ -1,13 +1,15 @@
 const { response, request } = require("express");
 const Mensage = require('../models/Mensage');
+const Usuario = require('../models/Usuario');
 
 
 const getMensages = async (req, res = response) => {
     try {
-        // Filtrar los mensajes por el UID del usuario autenticado
         const uid = req.uid;
-        const mensages = await Mensage.find({ user: uid })  // Filtrar por el usuario autenticado
-                                      .populate('user', 'name');
+        const mensages = await Mensage.find({
+            user: uid,
+            recipient: { $exists: false }
+        }).populate('user', 'name');
         res.json({
             ok: true,
             mensages
@@ -21,15 +23,64 @@ const getMensages = async (req, res = response) => {
     }
 }
 
-const crearMensage = async (req, res = response) => {
-    const mensage = new Mensage(req.body); // Instancia del modelo Mensage
-
+const getMensagesAdmin = async (req, res = response) => {
     try {
-        // Asociar el mensaje con el usuario autenticado
-        mensage.user = req.uid;
+        const mensages = await Mensage.find({ recipient: req.uid })
+            .populate('user', 'name email')
+            .sort({ date: -1 });
 
-        // Guardar el mensaje en la base de datos
-        const mensageGuardado = await mensage.save();
+        res.json({
+            ok: true,
+            mensages
+        });
+    } catch (error) {
+        console.error('Error al obtener los mensajes de empleados:', error);
+        res.status(500).json({
+            ok: false,
+            msg: 'No se pudieron obtener los mensajes de empleados'
+        });
+    }
+};
+
+const crearMensage = async (req, res = response) => {
+    try {
+        const text = req.body.text.trim();
+        if (!text) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'El mensaje no puede estar vacío'
+            });
+        }
+
+        const sender = await Usuario.findById(req.uid).select('role');
+        if (!sender || sender.role !== 'user') {
+            return res.status(403).json({
+                ok: false,
+                msg: 'Solo los empleados pueden enviar mensajes al administrador'
+            });
+        }
+
+        const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+        if (!adminEmail) {
+            return res.status(503).json({
+                ok: false,
+                msg: 'El administrador no está configurado en el servidor'
+            });
+        }
+
+        const admin = await Usuario.findOne({ role: 'admin', email: adminEmail }).select('_id');
+        if (!admin) {
+            return res.status(503).json({
+                ok: false,
+                msg: 'No se encontró la cuenta administradora'
+            });
+        }
+
+        const mensageGuardado = await new Mensage({
+            text,
+            user: req.uid,
+            recipient: admin._id
+        }).save();
 
         res.json({
             ok: true,
@@ -44,6 +95,33 @@ const crearMensage = async (req, res = response) => {
         });
     }
 }
+
+const eliminarMensageAdmin = async (req, res = response) => {
+    try {
+        const mensage = await Mensage.findOneAndDelete({
+            _id: req.params.id,
+            recipient: req.uid
+        });
+
+        if (!mensage) {
+            return res.status(404).json({
+                ok: false,
+                msg: 'El mensaje no existe en el buzón del administrador'
+            });
+        }
+
+        res.json({
+            ok: true,
+            msg: 'Mensaje eliminado'
+        });
+    } catch (error) {
+        console.error('Error al eliminar el mensaje recibido:', error);
+        res.status(500).json({
+            ok: false,
+            msg: 'No se pudo eliminar el mensaje'
+        });
+    }
+};
 
 const actualizarMensage = async (req = request, res = response) => {
     const mensageId = req.params.id;
@@ -67,12 +145,11 @@ const actualizarMensage = async (req = request, res = response) => {
         }
 
         // Crear el nuevo mensaje
-        const nuevoMensage = {
-            ...req.body,
-            user: uid
-        }
-
-        const mensageActualizado = await Mensage.findByIdAndUpdate(mensageId, nuevoMensage, { new: true });
+        const mensageActualizado = await Mensage.findByIdAndUpdate(
+            mensageId,
+            { text: req.body.text },
+            { new: true, runValidators: true }
+        );
 
         res.json({
             ok: true,
@@ -128,7 +205,9 @@ const eliminarMensage = async (req, res = response) => {
 
 module.exports = {
     getMensages,
+    getMensagesAdmin,
     crearMensage,
     actualizarMensage,
     eliminarMensage,
+    eliminarMensageAdmin,
 }
