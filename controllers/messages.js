@@ -7,9 +7,11 @@ const getMensages = async (req, res = response) => {
     try {
         const uid = req.uid;
         const mensages = await Mensage.find({
-            user: uid,
-            recipient: { $exists: false }
-        }).populate('user', 'name');
+            $or: [
+                { recipient: uid },
+                { user: uid, recipient: { $exists: false } }
+            ]
+        }).populate('user', 'name email').sort({ date: -1 });
         res.json({
             ok: true,
             mensages
@@ -38,6 +40,39 @@ const getMensagesAdmin = async (req, res = response) => {
         res.status(500).json({
             ok: false,
             msg: 'No se pudieron obtener los mensajes de empleados'
+        });
+    }
+};
+
+const responderMensage = async (req, res = response) => {
+    try {
+        const recipient = await Usuario.findOne({
+            _id: req.body.recipientId,
+            role: 'user'
+        }).select('_id');
+
+        if (!recipient) {
+            return res.status(404).json({
+                ok: false,
+                msg: 'El empleado seleccionado no existe'
+            });
+        }
+
+        const mensage = await new Mensage({
+            text: req.body.text.trim(),
+            user: req.uid,
+            recipient: recipient._id
+        }).save();
+
+        res.status(201).json({
+            ok: true,
+            mensage
+        });
+    } catch (error) {
+        console.error('Error al responder al empleado:', error);
+        res.status(500).json({
+            ok: false,
+            msg: 'No se pudo enviar la respuesta'
         });
     }
 };
@@ -170,24 +205,20 @@ const eliminarMensage = async (req, res = response) => {
     const uid = req.uid;
 
     try {
-        const mensage = await Mensage.findById(mensageId);
+        const mensage = await Mensage.findOneAndDelete({
+            _id: mensageId,
+            $or: [
+                { user: uid },
+                { recipient: uid }
+            ]
+        });
 
         if (!mensage) {
             return res.status(404).json({
                 ok: false,
-                msg: 'Mensage no existe por ese id'
+                msg: 'El mensaje no existe o no tienes autorización para eliminarlo'
             });
         }
-
-        if (mensage.user.toString() !== uid) {
-            return res.status(401).json({
-                ok: false,
-                msg: 'No tiene autorización para eliminar este evento'
-            });
-        }
-
-        // Borrar el mensaje
-        await Mensage.findByIdAndDelete(mensageId);
 
         res.json({
             ok: true,
@@ -206,6 +237,7 @@ const eliminarMensage = async (req, res = response) => {
 module.exports = {
     getMensages,
     getMensagesAdmin,
+    responderMensage,
     crearMensage,
     actualizarMensage,
     eliminarMensage,

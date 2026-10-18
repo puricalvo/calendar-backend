@@ -8,6 +8,7 @@ const { validarAdmin } = require('../middlewares/validar-admin');
 const {
     getMensages,
     getMensagesAdmin,
+    responderMensage,
     crearMensage,
     actualizarMensage,
     eliminarMensage,
@@ -27,6 +28,18 @@ router.use( validarJWT );
 router.get('/', getMensages );
 router.get('/admin/inbox', validarAdmin, getMensagesAdmin);
 router.delete('/admin/inbox/:id', validarAdmin, check('id', 'El mensaje no es válido').isMongoId(), validarCampos, eliminarMensageAdmin);
+router.post(
+    '/admin/reply',
+    validarAdmin,
+    check('recipientId', 'Selecciona un empleado válido').isMongoId(),
+    check('text', 'La respuesta es obligatoria y no puede superar los 2000 caracteres')
+        .isString()
+        .trim()
+        .notEmpty()
+        .isLength({ max: 2000 }),
+    validarCampos,
+    responderMensage
+);
 
 
 // Crear un nuevo evento
