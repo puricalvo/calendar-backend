@@ -14,6 +14,10 @@ const MensageSchema = Schema({
         ref: 'Usuario',
         required: true
     },
+    recipient: {
+        type: Schema.Types.ObjectId,
+        ref: 'Usuario'
+    },
     date: {
         type: Date,
         default: Date.now
