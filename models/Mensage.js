@@ -21,12 +21,19 @@ const MensageSchema = Schema({
     date: {
         type: Date,
         default: Date.now
+    },
+    readAt: {
+        type: Date,
+        default: null
     }
  
     
    
 
 });
+
+MensageSchema.index({ recipient: 1, date: -1, _id: -1 });
+MensageSchema.index({ user: 1, date: -1, _id: -1 });
 
 MensageSchema.method('toJSON', function() {
     const { __v, _id, ...object } = this.toObject();

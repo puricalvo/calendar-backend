@@ -10,11 +10,9 @@ const {
     getMensagesAdmin,
     responderMensage,
     crearMensage,
-    actualizarMensage,
-    eliminarMensage,
-    eliminarMensageAdmin
+    marcarMensageLeido
 } = require('../controllers/messages');
-const { check } = require('express-validator');
+const { check, query } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos');
 
 
@@ -25,9 +23,15 @@ router.use( validarJWT );
 
 
 // Obtener mensages
-router.get('/', getMensages );
-router.get('/admin/inbox', validarAdmin, getMensagesAdmin);
-router.delete('/admin/inbox/:id', validarAdmin, check('id', 'El mensaje no es válido').isMongoId(), validarCampos, eliminarMensageAdmin);
+const validatePagination = [
+    query('limit', 'El tamaño de página no es válido').optional().isInt({ min: 1, max: 10 }),
+    query('beforeDate', 'La fecha del cursor no es válida').optional().isISO8601(),
+    query('beforeId', 'El identificador del cursor no es válido').optional().isMongoId(),
+    validarCampos
+];
+
+router.get('/', validatePagination, getMensages);
+router.get('/admin/inbox', validarAdmin, validatePagination, getMensagesAdmin);
 router.post(
     '/admin/reply',
     validarAdmin,
@@ -41,21 +45,18 @@ router.post(
     responderMensage
 );
 
+router.post(
+    '/:id/read',
+    check('id', 'El mensaje no es válido').isMongoId(),
+    validarCampos,
+    marcarMensageLeido
+);
 
-// Crear un nuevo evento
 router.post(
     '/',
     check('text', 'El mensaje es obligatorio y no puede superar los 2000 caracteres').isString().trim().notEmpty().isLength({ max: 2000 }),
     validarCampos,
     crearMensage
 );
-
-
-// Actualizar Evento
-router.put('/:id', actualizarMensage );
-
-// Borrar Evento
-router.delete('/:id', eliminarMensage );
-
 
 module.exports = router; 

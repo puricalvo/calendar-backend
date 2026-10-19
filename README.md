@@ -43,7 +43,10 @@ Por defecto, el frontend local utiliza la API en `http://localhost:4000/api`.
 - Gestión de servicios y descansos asignados a empleados.
 - Panel administrativo para consultar los servicios semanales, registrar incidencias y marcar servicios completados.
 - Los servicios se conservan en la base de datos después de su fecha; se pueden consultar navegando a semanas anteriores y eliminar manualmente desde el panel cuando corresponda.
-- API de calendario y mensajería.
+- Mensajería con historial paginado, respuestas del administrador y confirmación de lectura por el destinatario.
+- El contenido de los mensajes no se puede editar ni eliminar por la API; solo se añade la marca de lectura del destinatario. La primera página contiene hasta 10 mensajes y las siguientes páginas, hasta 5 mensajes anteriores.
+
+La lectura se registra cuando el destinatario marca explícitamente el mensaje como leído; cargar o visualizar el historial por sí solo no genera una confirmación.
 
 ## Seguridad
 
