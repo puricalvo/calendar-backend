@@ -42,6 +42,7 @@ Por defecto, el frontend local utiliza la API en `http://localhost:4000/api`.
 - Autenticación mediante JWT y cuentas de usuario/administrador.
 - Gestión de servicios y descansos asignados a empleados.
 - Panel administrativo para consultar los servicios semanales, registrar incidencias y marcar servicios completados.
+- Los servicios se conservan en la base de datos después de su fecha; se pueden consultar navegando a semanas anteriores y eliminar manualmente desde el panel cuando corresponda.
 - API de calendario y mensajería.
 
 ## Seguridad
