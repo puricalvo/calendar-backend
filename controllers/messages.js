@@ -1,47 +1,95 @@
 const { response, request } = require("express");
+const mongoose = require('mongoose');
 const Mensage = require('../models/Mensage');
 const Usuario = require('../models/Usuario');
 
+const DEFAULT_PAGE_SIZE = 10;
+
+const getPaginatedMessages = async (req, res, filter, errorMessage) => {
+    try {
+        const limit = Number(req.query.limit || DEFAULT_PAGE_SIZE);
+        const hasDateCursor = Boolean(req.query.beforeDate);
+        const hasIdCursor = Boolean(req.query.beforeId);
+
+        if (hasDateCursor !== hasIdCursor) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'El cursor de paginación no es válido'
+            });
+        }
+
+        const filters = [filter];
+        if (hasDateCursor) {
+            filters.push({
+                $or: [
+                    { date: { $lt: new Date(req.query.beforeDate) } },
+                    {
+                        date: new Date(req.query.beforeDate),
+                        _id: { $lt: new mongoose.Types.ObjectId(req.query.beforeId) }
+                    }
+                ]
+            });
+        }
+
+        const query = filters.length === 1 ? filter : { $and: filters };
+        const [page, total] = await Promise.all([
+            Mensage.find(query)
+                .populate('user', 'name email')
+                .populate('recipient', 'name email')
+                .sort({ date: -1, _id: -1 })
+                .limit(limit + 1),
+            Mensage.countDocuments(filter)
+        ]);
+
+        const hasMore = page.length > limit;
+        const mensages = hasMore ? page.slice(0, limit) : page;
+        const oldestMessage = mensages[mensages.length - 1];
+
+        res.json({
+            ok: true,
+            mensages,
+            total,
+            hasMore,
+            nextCursor: hasMore ? {
+                beforeDate: oldestMessage.date.toISOString(),
+                beforeId: oldestMessage.id
+            } : null
+        });
+    } catch (error) {
+        console.error(errorMessage, error);
+        res.status(500).json({
+            ok: false,
+            msg: errorMessage
+        });
+    }
+};
 
 const getMensages = async (req, res = response) => {
-    try {
-        const uid = req.uid;
-        const mensages = await Mensage.find({
+    return getPaginatedMessages(
+        req,
+        res,
+        {
             $or: [
-                { recipient: uid },
-                { user: uid, recipient: { $exists: false } }
+                { recipient: req.uid },
+                { user: req.uid }
             ]
-        }).populate('user', 'name email').sort({ date: -1 });
-        res.json({
-            ok: true,
-            mensages
-        });
-    } catch (error) {
-        console.error('Error al obtener los mensajes:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Error al obtener los mensajes'
-        });
-    }
-}
+        },
+        'Error al obtener los mensajes'
+    );
+};
 
 const getMensagesAdmin = async (req, res = response) => {
-    try {
-        const mensages = await Mensage.find({ recipient: req.uid })
-            .populate('user', 'name email')
-            .sort({ date: -1 });
-
-        res.json({
-            ok: true,
-            mensages
-        });
-    } catch (error) {
-        console.error('Error al obtener los mensajes de empleados:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'No se pudieron obtener los mensajes de empleados'
-        });
-    }
+    return getPaginatedMessages(
+        req,
+        res,
+        {
+            $or: [
+                { recipient: req.uid },
+                { user: req.uid }
+            ]
+        },
+        'No se pudieron obtener los mensajes de empleados'
+    );
 };
 
 const responderMensage = async (req, res = response) => {
@@ -63,6 +111,10 @@ const responderMensage = async (req, res = response) => {
             user: req.uid,
             recipient: recipient._id
         }).save();
+        await mensage.populate([
+            { path: 'user', select: 'name email' },
+            { path: 'recipient', select: 'name email' }
+        ]);
 
         res.status(201).json({
             ok: true,
@@ -116,6 +168,10 @@ const crearMensage = async (req, res = response) => {
             user: req.uid,
             recipient: admin._id
         }).save();
+        await mensageGuardado.populate([
+            { path: 'user', select: 'name email' },
+            { path: 'recipient', select: 'name email' }
+        ]);
 
         res.json({
             ok: true,
@@ -123,123 +179,66 @@ const crearMensage = async (req, res = response) => {
         });
 
     } catch (error) {
-        console.log(error);
+        console.error('Error al crear el mensaje:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Hable con el administrador'
-        });
-    }
-}
-
-const eliminarMensageAdmin = async (req, res = response) => {
-    try {
-        const mensage = await Mensage.findOneAndDelete({
-            _id: req.params.id,
-            recipient: req.uid
-        });
-
-        if (!mensage) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'El mensaje no existe en el buzón del administrador'
-            });
-        }
-
-        res.json({
-            ok: true,
-            msg: 'Mensaje eliminado'
-        });
-    } catch (error) {
-        console.error('Error al eliminar el mensaje recibido:', error);
-        res.status(500).json({
-            ok: false,
-            msg: 'No se pudo eliminar el mensaje'
+            msg: 'No se pudo enviar el mensaje al administrador'
         });
     }
 };
 
-const actualizarMensage = async (req = request, res = response) => {
-    const mensageId = req.params.id;
-    const uid = req.uid;
-
+const marcarMensageLeido = async (req = request, res = response) => {
     try {
-        const mensage = await Mensage.findById(mensageId);
-
-        if (!mensage) {
-            return res.status(404).json({
-                ok: false,
-                msg: 'Mensage no existe por ese id'
-            });
-        }
-
-        if (mensage.user.toString() !== uid) {
-            return res.status(401).json({
-                ok: false,
-                msg: 'No tiene autorización de editar este mensage'
-            });
-        }
-
-        // Crear el nuevo mensaje
-        const mensageActualizado = await Mensage.findByIdAndUpdate(
-            mensageId,
-            { text: req.body.text },
-            { new: true, runValidators: true }
+        const criteria = {
+            _id: req.params.id,
+            recipient: req.uid,
+            $or: [
+                { readAt: { $exists: false } },
+                { readAt: null }
+            ]
+        };
+        const updatedMessage = await Mensage.findOneAndUpdate(
+            criteria,
+            { $set: { readAt: new Date() } },
+            { new: true }
         );
 
-        res.json({
-            ok: true,
-            mensage: mensageActualizado
-        });
+        if (updatedMessage) {
+            return res.json({
+                ok: true,
+                readAt: updatedMessage.readAt
+            });
+        }
 
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({
-            ok: false,
-            msg: 'Hable con el administrador'
-        });
-    }
-}
+        const existingMessage = await Mensage.findOne({
+            _id: req.params.id,
+            recipient: req.uid
+        }).select('readAt');
 
-const eliminarMensage = async (req, res = response) => {
-    const mensageId = req.params.id;
-    const uid = req.uid;
-
-    try {
-        const mensage = await Mensage.findOneAndDelete({
-            _id: mensageId,
-            $or: [
-                { user: uid },
-                { recipient: uid }
-            ]
-        });
-
-        if (!mensage) {
+        if (!existingMessage) {
             return res.status(404).json({
                 ok: false,
-                msg: 'El mensaje no existe o no tienes autorización para eliminarlo'
+                msg: 'El mensaje no existe o no eres su destinatario'
             });
         }
 
         res.json({
             ok: true,
-            msg: 'Mensage Borrado'
+            readAt: existingMessage.readAt
         });
-
     } catch (error) {
-        console.log(error);
+        console.error('Error al registrar la lectura del mensaje:', error);
         res.status(500).json({
             ok: false,
-            msg: 'Hable con el administrador'
+            msg: 'No se pudo registrar la lectura del mensaje'
         });
     }
-}
+};
 
 module.exports = {
     getMensages,
     getMensagesAdmin,
     responderMensage,
     crearMensage,
-    actualizarMensage,
-    eliminarMensage,
-    eliminarMensageAdmin,
-}
+    marcarMensageLeido,
+};
